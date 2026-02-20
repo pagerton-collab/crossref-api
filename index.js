@@ -95,4 +95,6 @@ app.get("/search", async (req, res) => {
 // SERVER START
 // ------------------------------------------------------------
 const PORT = process.env.PORT || 10000;
+console.log("Render PORT:", process.env.PORT);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
