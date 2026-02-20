@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CrossRef Search</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    input { padding: 10px; width: 250px; }
+    button { padding: 10px; }
+    pre { background: #eee; padding: 10px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <h1>CrossRef Search</h1>
+
+  <input id="query" placeholder="Enter part number">
+  <button onclick="runSearch()">Search</button>
+
+  <pre id="output"></pre>
+
+  <script>
+    async function runSearch() {
+      const q = document.getElementById("query").value.trim();
+      if (!q) return;
+
+      document.getElementById("output").textContent = "Searching...";
+
+      const res = await fetch(`/search?query=${encodeURIComponent(q)}`);
+      const data = await res.json();
+
+      document.getElementById("output").textContent =
+        JSON.stringify(data, null, 2);
+    }
+  </script>
+
+</body>
+</html>
