@@ -16,10 +16,50 @@ const client = new pg.Client({
 });
 
 // ------------------------------------------------------------
-// ROOT ROUTE (helps Render detect the port instantly)
+// ROOT HTML HOMEPAGE
 // ------------------------------------------------------------
 app.get("/", (req, res) => {
-  res.json({ status: "running", message: "CrossRef API is live" });
+  res.send(`
+    <html>
+      <head>
+        <title>CrossRef API</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+            color: #333;
+          }
+          .box {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            margin: auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          }
+          h1 {
+            margin-top: 0;
+          }
+          code {
+            background: #eee;
+            padding: 4px 6px;
+            border-radius: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h1>CrossRef API is Live</h1>
+          <p>Your backend is running successfully.</p>
+          <p>Try a search:</p>
+          <p><code>/search?query=12345</code></p>
+          <p>Health check:</p>
+          <p><code>/health</code></p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 // ------------------------------------------------------------
@@ -30,7 +70,7 @@ app.get("/health", (req, res) => {
 });
 
 // ------------------------------------------------------------
-// SEARCH ENDPOINT (NO PRELOAD, NO MEMORY CRASH)
+// SEARCH ENDPOINT — SINGLE RECURSIVE SQL QUERY
 // ------------------------------------------------------------
 app.get("/search", async (req, res) => {
   try {
@@ -39,73 +79,35 @@ app.get("/search", async (req, res) => {
       return res.json({ count: 0, results: [] });
     }
 
-    // STEP 1 — Get all rows where either field matches the input
-    const seedRows = await client.query(
-      `
-      SELECT reference_number, make, part_number, company, description
-      FROM public.access_parts
-      WHERE UPPER(reference_number) = $1
-         OR UPPER(part_number) = $1
-      `,
-      [input]
-    );
-
-    if (seedRows.rows.length === 0) {
-      return res.json({ count: 0, results: [] });
-    }
-
-    // STEP 2 — BFS using database queries (no preload)
-    const visited = new Set([input]);
-    const queue = [input];
-    const family = new Set([input]);
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-
-      const neighbors = await client.query(
-        `
+    const sql = `
+      WITH RECURSIVE family AS (
+        -- Start with the input
         SELECT reference_number, part_number
         FROM public.access_parts
         WHERE UPPER(reference_number) = $1
            OR UPPER(part_number) = $1
-        `,
-        [current]
-      );
 
-      for (const row of neighbors.rows) {
-        const a = row.part_number?.toUpperCase();
-        const b = row.reference_number?.toUpperCase();
+        UNION
 
-        if (a && !visited.has(a)) {
-          visited.add(a);
-          family.add(a);
-          queue.push(a);
-        }
+        -- Expand outward
+        SELECT ap.reference_number, ap.part_number
+        FROM public.access_parts ap
+        INNER JOIN family f
+          ON ap.reference_number = f.part_number
+          OR ap.part_number = f.reference_number
+      )
+      SELECT DISTINCT ap.reference_number, ap.make, ap.part_number, ap.company, ap.description
+      FROM public.access_parts ap
+      INNER JOIN family f
+        ON ap.reference_number = f.reference_number
+        OR ap.part_number = f.part_number;
+    `;
 
-        if (b && !visited.has(b)) {
-          visited.add(b);
-          family.add(b);
-          queue.push(b);
-        }
-      }
-    }
-
-    const familyArray = Array.from(family);
-
-    // STEP 3 — Final fetch of all matching rows
-    const finalRows = await client.query(
-      `
-      SELECT reference_number, make, part_number, company, description
-      FROM public.access_parts
-      WHERE UPPER(reference_number) = ANY($1)
-         OR UPPER(part_number) = ANY($1)
-      `,
-      [familyArray]
-    );
+    const result = await client.query(sql, [input]);
 
     res.json({
-      count: finalRows.rows.length,
-      results: finalRows.rows
+      count: result.rows.length,
+      results: result.rows
     });
 
   } catch (err) {
