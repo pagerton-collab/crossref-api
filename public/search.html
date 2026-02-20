@@ -7,93 +7,186 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
       margin: 0;
       background: #f5f5f5;
     }
 
-    .container {
-      max-width: 900px;
-      margin: auto;
+    /* Sticky header */
+    .topbar {
+      position: sticky;
+      top: 0;
       background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      z-index: 10;
     }
 
-    input {
-      padding: 12px;
-      width: 70%;
-      font-size: 18px;
+    .topbar input {
+      padding: 10px;
+      width: 65%;
+      font-size: 16px;
       border-radius: 6px;
       border: 1px solid #ccc;
     }
 
-    button {
-      padding: 12px 20px;
-      font-size: 18px;
+    .topbar button {
+      padding: 10px 16px;
+      font-size: 16px;
       border: none;
       background: #007bff;
       color: white;
       border-radius: 6px;
-      margin-left: 10px;
+      margin-left: 8px;
+    }
+
+    /* Progress bar */
+    .progress-container {
+      width: 100%;
+      background: #ddd;
+      height: 6px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #007bff;
+      animation: loading 2s infinite;
+    }
+
+    @keyframes loading {
+      0% { width: 0%; }
+      50% { width: 80%; }
+      100% { width: 0%; }
+    }
+
+    /* Horizontal checkbox row */
+    .column-toggle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .column-toggle label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #eee;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    /* Results container */
+    .results-frame {
+      margin: 15px;
+      background: white;
+      padding: 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      overflow-x: auto;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
-      font-size: 16px;
+      font-size: 14px;
     }
 
     th, td {
       border: 1px solid #ddd;
-      padding: 10px;
+      padding: 8px;
       text-align: left;
+      white-space: nowrap;
     }
 
     th {
       background: #eee;
     }
 
-    .column-toggle {
-      margin-top: 15px;
+    /* Clickable part numbers */
+    .linkable {
+      color: #007bff;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* Popup menu */
+    .popup-menu {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 10px;
+      z-index: 9999;
+      width: 220px;
+    }
+
+    .popup-menu button {
+      width: 100%;
+      padding: 10px;
+      margin: 4px 0;
+      border: none;
+      background: #f0f0f0;
+      border-radius: 6px;
       font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .popup-menu button:hover {
+      background: #e0e0e0;
     }
 
     @media (max-width: 600px) {
-      input {
+      .topbar input {
         width: 100%;
         margin-bottom: 10px;
       }
-      button {
+      .topbar button {
         width: 100%;
         margin-left: 0;
+      }
+      table {
+        font-size: 12px;
       }
     }
   </style>
 </head>
 
-<body>
-  <div class="container">
-    <h1>CrossRef Search</h1>
+<body onclick="closePopup(event)">
 
+  <div class="topbar">
     <input id="query" placeholder="Enter part number" oninput="this.value=this.value.toUpperCase()">
     <button onclick="runSearch()">Search</button>
 
-    <div class="column-toggle">
-      <label><input type="checkbox" checked onclick="toggleColumn(0)"> Reference</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(1)"> Make</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(2)"> Part #</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(3)"> Company</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(4)"> Description</label>
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar"></div>
     </div>
 
-    <div id="results"></div>
+    <div class="column-toggle">
+      <label><input type="checkbox" checked onclick="toggleColumn(0)">Ref</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(1)">Make</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(2)">Part</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(3)">Co</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(4)">Desc</label>
+    </div>
+  </div>
+
+  <div class="results-frame" id="results">
+    <p>Enter a part number to begin.</p>
   </div>
 
   <script>
-    // ENTER KEY triggers search
+    let popup = null;
+    let currentController = null;
+
+    // ENTER key submits
     document.getElementById("query").addEventListener("keypress", function(e) {
       if (e.key === "Enter") runSearch();
     });
@@ -104,21 +197,87 @@
 
       for (let row of table.rows) {
         let cell = row.cells[colIndex];
-        if (cell.style.display === "none") {
-          cell.style.display = "";
-        } else {
-          cell.style.display = "none";
-        }
+        cell.style.display = cell.style.display === "none" ? "" : "none";
       }
+    }
+
+    function showProgress() {
+      document.getElementById("progressContainer").style.display = "block";
+    }
+
+    function hideProgress() {
+      document.getElementById("progressContainer").style.display = "none";
+    }
+
+    function closePopup(e) {
+      if (popup && !popup.contains(e.target)) {
+        popup.remove();
+        popup = null;
+      }
+    }
+
+    function openSearchMenu(part, event) {
+      if (popup) popup.remove();
+
+      popup = document.createElement("div");
+      popup.className = "popup-menu";
+
+      const sites = [
+        { name: "Google", url: `https://www.google.com/search?q=${part}` },
+        { name: "Messicks", url: `https://www.messicks.com/search?q=${part}` },
+        { name: "All States Ag Parts", url: `https://www.tractorpartsasap.com/search?keywords=${part}` },
+        { name: "Worthington", url: `https://www.wtpinc.com/search?searchText=${part}` },
+        { name: "eBay", url: `https://www.ebay.com/sch/i.html?_nkw=${part}` },
+        { name: "Amazon", url: `https://www.amazon.com/s?k=${part}` },
+        { name: "TractorHouse", url: `https://www.tractorhouse.com/listings/search?keywords=${part}` },
+        { name: "SMA WC", url: `https://wc.smalink.net/common/inventory/itemlookup.aspx?searchstring=${part}&customerid=0` },
+        { name: "SMALink", url: `https://www.smalink.com/c?search=${part}` }
+      ];
+
+      sites.forEach(site => {
+        const btn = document.createElement("button");
+        btn.textContent = site.name;
+        btn.onclick = () => window.open(site.url, "_blank");
+        popup.appendChild(btn);
+      });
+
+      document.body.appendChild(popup);
+
+      popup.style.left = event.pageX + "px";
+      popup.style.top = event.pageY + "px";
     }
 
     async function runSearch() {
       const q = document.getElementById("query").value.trim();
       if (!q) return;
 
+      // Cancel previous search
+      if (currentController) {
+        currentController.abort();
+      }
+
+      currentController = new AbortController();
+      const signal = currentController.signal;
+
+      showProgress();
       document.getElementById("results").innerHTML = "<p>Searching...</p>";
 
-      const res = await fetch(`/search?query=${encodeURIComponent(q)}`);
+      let res;
+      try {
+        res = await fetch(`/search?query=${encodeURIComponent(q)}`, { signal });
+      } catch (err) {
+        hideProgress();
+        if (err.name === "AbortError") {
+          console.log("Previous search cancelled");
+          return;
+        }
+        document.getElementById("results").innerHTML = "<p>Error loading results.</p>";
+        return;
+      }
+
+      currentController = null;
+      hideProgress();
+
       const data = await res.json();
 
       if (!data.results || data.results.length === 0) {
@@ -139,9 +298,9 @@
       for (const row of data.results) {
         html += `
           <tr>
-            <td>${row.reference_number || ""}</td>
+            <td><span class="linkable" onclick="openSearchMenu('${row.reference_number}', event)">${row.reference_number || ""}</span></td>
             <td>${row.make || ""}</td>
-            <td>${row.part_number || ""}</td>
+            <td><span class="linkable" onclick="openSearchMenu('${row.part_number}', event)">${row.part_number || ""}</span></td>
             <td>${row.company || ""}</td>
             <td>${row.description || ""}</td>
           </tr>`;
