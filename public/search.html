@@ -19,11 +19,26 @@
       padding: 10px 12px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .topbar-left {
+      flex: 1;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
     }
 
     .topbar input {
       padding: 8px;
-      width: 60%;
+      width: 100%;
       font-size: 15px;
       border-radius: 6px;
       border: 1px solid #ccc;
@@ -36,7 +51,21 @@
       background: #007bff;
       color: white;
       border-radius: 6px;
-      margin-left: 6px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .options-btn {
+      padding: 6px 10px;
+      font-size: 18px;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      color: #333;
     }
 
     /* Progress bar */
@@ -61,28 +90,6 @@
       0% { width: 0%; }
       50% { width: 80%; }
       100% { width: 0%; }
-    }
-
-    /* Smaller checkboxes */
-    .column-toggle {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
-      font-size: 11px;
-    }
-
-    .column-toggle label {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      background: #eee;
-      padding: 2px 4px;
-      border-radius: 4px;
-    }
-
-    .column-toggle input {
-      transform: scale(0.75);
     }
 
     /* Results container */
@@ -110,6 +117,19 @@
 
     th {
       background: #eee;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sortable-header {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sort-arrow {
+      font-size: 11px;
+      color: #555;
     }
 
     /* Clickable part numbers */
@@ -119,7 +139,7 @@
       cursor: pointer;
     }
 
-    /* Modal backdrop */
+    /* Search modal backdrop (for part search) */
     .modal-backdrop {
       position: fixed;
       top: 0;
@@ -130,7 +150,7 @@
       z-index: 9998;
     }
 
-    /* Centered popup card */
+    /* Centered popup card (for part search) */
     .popup-menu {
       position: fixed;
       top: 50%;
@@ -146,7 +166,6 @@
       z-index: 9999;
     }
 
-    /* Compact pill-style buttons (two columns) */
     .popup-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -167,14 +186,74 @@
       background: #e0e0e0;
     }
 
+    /* Options modal (separate so it doesn't conflict with search modal) */
+    .options-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.4);
+      z-index: 9990;
+    }
+
+    .options-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      width: 260px;
+      max-height: 70%;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      z-index: 9991;
+      font-size: 13px;
+    }
+
+    .options-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+
+    .options-section-title {
+      font-weight: bold;
+      margin-top: 8px;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .options-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .options-row input {
+      transform: scale(0.85);
+    }
+
     @media (max-width: 600px) {
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .topbar-left {
+        width: 100%;
+      }
+      .topbar-right {
+        width: 100%;
+        justify-content: flex-end;
+      }
       .topbar input {
         width: 100%;
-        margin-bottom: 8px;
       }
       .topbar button {
-        width: 100%;
-        margin-left: 0;
+        flex: 0 0 auto;
       }
       table {
         font-size: 12px;
@@ -186,20 +265,17 @@
 <body>
 
   <div class="topbar">
-    <input id="query" placeholder="Enter part number" oninput="this.value=this.value.toUpperCase()">
-    <button onclick="runSearch()">Search</button>
-
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar"></div>
+    <div class="topbar-left">
+      <input id="query" placeholder="Enter part number" oninput="this.value=this.value.toUpperCase()">
+      <button onclick="runSearch()">Search</button>
     </div>
-
-    <div class="column-toggle">
-      <label><input type="checkbox" checked onclick="toggleColumn(0)">Ref</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(1)">Make</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(2)">Part</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(3)">Co</label>
-      <label><input type="checkbox" checked onclick="toggleColumn(4)">Desc</label>
+    <div class="topbar-right">
+      <button class="options-btn" onclick="openOptionsModal()">⚙️</button>
     </div>
+  </div>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar"></div>
   </div>
 
   <div class="results-frame" id="results">
@@ -208,21 +284,28 @@
 
   <script>
     let currentController = null;
+
+    // Search modal (for part search)
     let backdrop = null;
     let popup = null;
+
+    // Options modal
+    let optionsBackdrop = null;
+    let optionsModal = null;
+
+    // State
+    let allResults = [];
+    let currentSortCol = null; // 0..4
+    let currentSortDir = null; // "asc" or "desc"
+    let visibleColumns = [true, true, true, true, true];
+
+    let fuzzyEnabled = false;
+    let exactOnly = false; // if true, forces fuzzy off
+    let caseInsensitive = true; // UI only; backend already behaves this way
 
     document.getElementById("query").addEventListener("keypress", e => {
       if (e.key === "Enter") runSearch();
     });
-
-    function toggleColumn(colIndex) {
-      const table = document.getElementById("resultsTable");
-      if (!table) return;
-      for (let row of table.rows) {
-        let cell = row.cells[colIndex];
-        cell.style.display = cell.style.display === "none" ? "" : "none";
-      }
-    }
 
     function showProgress() {
       document.getElementById("progressContainer").style.display = "block";
@@ -231,6 +314,8 @@
     function hideProgress() {
       document.getElementById("progressContainer").style.display = "none";
     }
+
+    // ---------- SEARCH MODAL (PART SEARCH) ----------
 
     function closeModal() {
       if (popup) popup.remove();
@@ -285,6 +370,231 @@
       document.body.appendChild(popup);
     }
 
+    // ---------- OPTIONS MODAL (GEAR) ----------
+
+    function closeOptionsModal() {
+      if (optionsModal) optionsModal.remove();
+      if (optionsBackdrop) optionsBackdrop.remove();
+      optionsModal = null;
+      optionsBackdrop = null;
+    }
+
+    function openOptionsModal() {
+      closeOptionsModal();
+
+      optionsBackdrop = document.createElement("div");
+      optionsBackdrop.className = "options-backdrop";
+      optionsBackdrop.onclick = closeOptionsModal;
+
+      optionsModal = document.createElement("div");
+      optionsModal.className = "options-modal";
+
+      const title = document.createElement("div");
+      title.className = "options-title";
+      title.textContent = "Options";
+      optionsModal.appendChild(title);
+
+      // Column toggles
+      const colTitle = document.createElement("div");
+      colTitle.className = "options-section-title";
+      colTitle.textContent = "Columns";
+      optionsModal.appendChild(colTitle);
+
+      const colNames = ["Reference", "Make", "Part #", "Company", "Description"];
+
+      colNames.forEach((name, idx) => {
+        const row = document.createElement("label");
+        row.className = "options-row";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = visibleColumns[idx];
+        cb.onchange = () => {
+          visibleColumns[idx] = cb.checked;
+          renderTable();
+        };
+
+        const span = document.createElement("span");
+        span.textContent = name;
+
+        row.appendChild(cb);
+        row.appendChild(span);
+        optionsModal.appendChild(row);
+      });
+
+      // Search behavior
+      const searchTitle = document.createElement("div");
+      searchTitle.className = "options-section-title";
+      searchTitle.textContent = "Search Behavior";
+      optionsModal.appendChild(searchTitle);
+
+      // Fuzzy search
+      const fuzzyRow = document.createElement("label");
+      fuzzyRow.className = "options-row";
+      const fuzzyCb = document.createElement("input");
+      fuzzyCb.type = "checkbox";
+      fuzzyCb.checked = fuzzyEnabled;
+      fuzzyCb.onchange = () => {
+        fuzzyEnabled = fuzzyCb.checked;
+        if (fuzzyEnabled) {
+          exactOnly = false;
+          exactCb.checked = false;
+        }
+      };
+      const fuzzySpan = document.createElement("span");
+      fuzzySpan.textContent = "Fuzzy Search";
+      fuzzyRow.appendChild(fuzzyCb);
+      fuzzyRow.appendChild(fuzzySpan);
+      optionsModal.appendChild(fuzzyRow);
+
+      // Exact only
+      const exactRow = document.createElement("label");
+      exactRow.className = "options-row";
+      const exactCb = document.createElement("input");
+      exactCb.type = "checkbox";
+      exactCb.checked = exactOnly;
+      exactCb.onchange = () => {
+        exactOnly = exactCb.checked;
+        if (exactOnly) {
+          fuzzyEnabled = false;
+          fuzzyCb.checked = false;
+        }
+      };
+      const exactSpan = document.createElement("span");
+      exactSpan.textContent = "Exact Match Only";
+      exactRow.appendChild(exactCb);
+      exactRow.appendChild(exactSpan);
+      optionsModal.appendChild(exactRow);
+
+      // Case-insensitive (UI only)
+      const ciRow = document.createElement("label");
+      ciRow.className = "options-row";
+      const ciCb = document.createElement("input");
+      ciCb.type = "checkbox";
+      ciCb.checked = caseInsensitive;
+      ciCb.onchange = () => {
+        caseInsensitive = ciCb.checked;
+      };
+      const ciSpan = document.createElement("span");
+      ciSpan.textContent = "Case-Insensitive";
+      ciRow.appendChild(ciCb);
+      ciRow.appendChild(ciSpan);
+      optionsModal.appendChild(ciRow);
+
+      document.body.appendChild(optionsBackdrop);
+      document.body.appendChild(optionsModal);
+    }
+
+    // ---------- SORTING + TABLE RENDER ----------
+
+    function onHeaderClick(colIndex) {
+      if (currentSortCol !== colIndex) {
+        currentSortCol = colIndex;
+        currentSortDir = "asc";
+      } else {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+      }
+      renderTable();
+    }
+
+    function sortResults(data) {
+      if (currentSortCol === null || currentSortDir === null) return data;
+
+      const colMap = {
+        0: "reference_number",
+        1: "make",
+        2: "part_number",
+        3: "company",
+        4: "description"
+      };
+
+      const key = colMap[currentSortCol];
+      const dir = currentSortDir;
+
+      const sorted = [...data].sort((a, b) => {
+        const va = (a[key] || "").toString().toUpperCase();
+        const vb = (b[key] || "").toString().toUpperCase();
+
+        if (!va && !vb) return 0;
+        if (!va) return 1;
+        if (!vb) return -1;
+
+        if (va < vb) return dir === "asc" ? -1 : 1;
+        if (va > vb) return dir === "asc" ? 1 : -1;
+        return 0;
+      });
+
+      return sorted;
+    }
+
+    function renderTable() {
+      const container = document.getElementById("results");
+
+      if (!allResults || allResults.length === 0) {
+        container.innerHTML = "<p>No results found.</p>";
+        return;
+      }
+
+      const sorted = sortResults(allResults);
+
+      let html = `<p><strong>${sorted.length}</strong> results found</p>`;
+      html += `<table id="resultsTable">
+        <tr>
+          ${renderHeaderCell(0, "Reference")}
+          ${renderHeaderCell(1, "Make")}
+          ${renderHeaderCell(2, "Part #")}
+          ${renderHeaderCell(3, "Company")}
+          ${renderHeaderCell(4, "Description")}
+        </tr>`;
+
+      for (const row of sorted) {
+        html += "<tr>";
+        // Reference
+        html += `<td style="${visibleColumns[0] ? "" : "display:none;"}">
+          <span class="linkable" onclick="openSearchMenu('${row.reference_number || ""}')">
+            ${row.reference_number || ""}
+          </span>
+        </td>`;
+        // Make
+        html += `<td style="${visibleColumns[1] ? "" : "display:none;"}">${row.make || ""}</td>`;
+        // Part #
+        html += `<td style="${visibleColumns[2] ? "" : "display:none;"}">
+          <span class="linkable" onclick="openSearchMenu('${row.part_number || ""}')">
+            ${row.part_number || ""}
+          </span>
+        </td>`;
+        // Company
+        html += `<td style="${visibleColumns[3] ? "" : "display:none;"}">${row.company || ""}</td>`;
+        // Description
+        html += `<td style="${visibleColumns[4] ? "" : "display:none;"}">${row.description || ""}</td>`;
+
+        html += "</tr>";
+      }
+
+      html += `</table>`;
+      container.innerHTML = html;
+    }
+
+    function renderHeaderCell(index, label) {
+      const arrow = getSortArrow(index);
+      const displayStyle = visibleColumns[index] ? "" : "display:none;";
+      return `
+        <th style="${displayStyle}" onclick="onHeaderClick(${index})">
+          <span class="sortable-header">
+            <span>${label}</span>
+            ${arrow ? `<span class="sort-arrow">${arrow}</span>` : ""}
+          </span>
+        </th>
+      `;
+    }
+
+    function getSortArrow(index) {
+      if (currentSortCol !== index) return "";
+      return currentSortDir === "asc" ? "▲" : "▼";
+    }
+
+    // ---------- SEARCH CALL ----------
+
     async function runSearch() {
       const q = document.getElementById("query").value.trim();
       if (!q) return;
@@ -296,9 +606,15 @@
       showProgress();
       document.getElementById("results").innerHTML = "<p>Searching...</p>";
 
+      const params = new URLSearchParams();
+      params.set("query", q);
+      if (fuzzyEnabled && !exactOnly) {
+        params.set("fuzzy", "true");
+      }
+
       let res;
       try {
-        res = await fetch(`/search?query=${encodeURIComponent(q)}`, { signal });
+        res = await fetch(`/search?${params.toString()}`, { signal });
       } catch (err) {
         hideProgress();
         if (err.name === "AbortError") return;
@@ -312,33 +628,16 @@
       const data = await res.json();
 
       if (!data.results || data.results.length === 0) {
+        allResults = [];
         document.getElementById("results").innerHTML = "<p>No results found.</p>";
         return;
       }
 
-      let html = `<p><strong>${data.count}</strong> results found</p>`;
-      html += `<table id="resultsTable">
-        <tr>
-          <th>Reference</th>
-          <th>Make</th>
-          <th>Part #</th>
-          <th>Company</th>
-          <th>Description</th>
-        </tr>`;
-
-      for (const row of data.results) {
-        html += `
-          <tr>
-            <td><span class="linkable" onclick="openSearchMenu('${row.reference_number}')">${row.reference_number || ""}</span></td>
-            <td>${row.make || ""}</td>
-            <td><span class="linkable" onclick="openSearchMenu('${row.part_number}')">${row.part_number || ""}</span></td>
-            <td>${row.company || ""}</td>
-            <td>${row.description || ""}</td>
-          </tr>`;
-      }
-
-      html += `</table>`;
-      document.getElementById("results").innerHTML = html;
+      allResults = data.results;
+      // Reset sort when new search runs
+      currentSortCol = null;
+      currentSortDir = null;
+      renderTable();
     }
   </script>
 

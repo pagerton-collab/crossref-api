@@ -1,110 +1,74 @@
-import express from "express";
-import cors from "cors";
-import pg from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static("public"));
-
-// PostgreSQL client
-const client = new pg.Client({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-// ------------------------------------------------------------
-// ROOT HTML HOMEPAGE
-// ------------------------------------------------------------
-app.get("/", (req, res) => {
-  res.send(`
-    <html>
-      <head>
-        <title>CrossRef API</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 40px;
-            background: #f5f5f5;
-            color: #333;
-          }
-          .box {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 600px;
-            margin: auto;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          }
-          h1 {
-            margin-top: 0;
-          }
-          code {
-            background: #eee;
-            padding: 4px 6px;
-            border-radius: 4px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>CrossRef API is Live</h1>
-          <p>Your backend is running successfully.</p>
-          <p>Try a search:</p>
-          <p><code>/search?query=12345</code></p>
-          <p>Health check:</p>
-          <p><code>/health</code></p>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-// ------------------------------------------------------------
-// HEALTH CHECK
-// ------------------------------------------------------------
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
-});
-
-// ------------------------------------------------------------
-// SEARCH ENDPOINT — SINGLE RECURSIVE SQL QUERY
-// ------------------------------------------------------------
 app.get("/search", async (req, res) => {
+  const client = await pool.connect();
   try {
-    const input = req.query.query?.trim().toUpperCase();
-    if (!input) {
+    const query = req.query.query?.trim() || "";
+    const fuzzy = req.query.fuzzy === "true";
+
+    if (!query) {
       return res.json({ count: 0, results: [] });
     }
 
-    const sql = `
-      WITH RECURSIVE family AS (
-        -- Start with the input
-        SELECT reference_number, part_number
-        FROM public.access_parts
-        WHERE UPPER(reference_number) = $1
-           OR UPPER(part_number) = $1
+    // Normalize input (remove spaces, hyphens, slashes)
+    const normalized = query.replace(/[\s\-\/]/g, "").toUpperCase();
 
-        UNION
+    let sql;
+    let params = [normalized];
 
-        -- Expand outward
-        SELECT ap.reference_number, ap.part_number
-        FROM public.access_parts ap
-        INNER JOIN family f
-          ON ap.reference_number = f.part_number
-          OR ap.part_number = f.reference_number
-      )
-      SELECT DISTINCT ap.reference_number, ap.make, ap.part_number, ap.company, ap.description
-      FROM public.access_parts ap
-      INNER JOIN family f
-        ON ap.reference_number = f.reference_number
-        OR ap.part_number = f.part_number;
-    `;
+    if (!fuzzy) {
+      // -------------------------------
+      // EXACT SEARCH MODE (fastest)
+      // -------------------------------
+      sql = `
+        SELECT *,
+          1 AS relevance
+        FROM access_parts
+        WHERE REPLACE(REPLACE(REPLACE(UPPER(part_number), ' ', ''), '-', ''), '/', '') = $1
+           OR REPLACE(REPLACE(REPLACE(UPPER(reference_number), ' ', ''), '-', ''), '/', '') = $1
+        LIMIT 500;
+      `;
+    } else {
+      // -------------------------------
+      // HYBRID FUZZY SEARCH MODE
+      // Exact → Partial → Trigram
+      // Balanced thresholds
+      // -------------------------------
 
-    const result = await client.query(sql, [input]);
+      sql = `
+        WITH normalized_data AS (
+          SELECT *,
+            REPLACE(REPLACE(REPLACE(UPPER(part_number), ' ', ''), '-', ''), '/', '') AS npn,
+            REPLACE(REPLACE(REPLACE(UPPER(reference_number), ' ', ''), '-', ''), '/', '') AS nrn
+          FROM access_parts
+        ),
+
+        ranked AS (
+          SELECT *,
+            CASE
+              WHEN npn = $1 OR nrn = $1 THEN 1        -- exact
+              WHEN npn LIKE '%' || $1 || '%' 
+                OR nrn LIKE '%' || $1 || '%' THEN 2  -- partial
+              WHEN similarity(npn, $1) > 0.25 
+                OR similarity(nrn, $1) > 0.25 THEN 3 -- trigram (balanced)
+              ELSE 99
+            END AS relevance_group,
+
+            GREATEST(
+              similarity(npn, $1),
+              similarity(nrn, $1)
+            ) AS sim_score
+
+          FROM normalized_data
+        )
+
+        SELECT *
+        FROM ranked
+        WHERE relevance_group < 99
+        ORDER BY relevance_group ASC, sim_score DESC
+        LIMIT 500;
+      `;
+    }
+
+    const result = await client.query(sql, params);
 
     res.json({
       count: result.rows.length,
@@ -113,17 +77,8 @@ app.get("/search", async (req, res) => {
 
   } catch (err) {
     console.error("Search error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Search failed" });
+  } finally {
+    client.release();
   }
-});
-
-// ------------------------------------------------------------
-// SERVER START — WITH DELAY TO ALLOW RENDER TO INJECT PORT
-// ------------------------------------------------------------
-client.connect().then(() => {
-  setTimeout(() => {
-    const PORT = process.env.PORT || 10000;
-    console.log("Render PORT value:", process.env.PORT);
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  }, 50);
 });
