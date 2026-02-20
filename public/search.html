@@ -186,7 +186,7 @@
       background: #e0e0e0;
     }
 
-    /* Options modal (separate so it doesn't conflict with search modal) */
+    /* Options modal */
     .options-backdrop {
       position: fixed;
       top: 0;
@@ -295,13 +295,13 @@
 
     // State
     let allResults = [];
-    let currentSortCol = null; // 0..4
-    let currentSortDir = null; // "asc" or "desc"
+    let currentSortCol = null;
+    let currentSortDir = null;
     let visibleColumns = [true, true, true, true, true];
 
     let fuzzyEnabled = false;
-    let exactOnly = false; // if true, forces fuzzy off
-    let caseInsensitive = true; // UI only; backend already behaves this way
+    let exactOnly = false;
+    let caseInsensitive = true;
 
     document.getElementById("query").addEventListener("keypress", e => {
       if (e.key === "Enter") runSearch();
@@ -315,8 +315,7 @@
       document.getElementById("progressContainer").style.display = "none";
     }
 
-    // ---------- SEARCH MODAL (PART SEARCH) ----------
-
+    // ---------- SEARCH MODAL ----------
     function closeModal() {
       if (popup) popup.remove();
       if (backdrop) backdrop.remove();
@@ -370,8 +369,7 @@
       document.body.appendChild(popup);
     }
 
-    // ---------- OPTIONS MODAL (GEAR) ----------
-
+    // ---------- OPTIONS MODAL ----------
     function closeOptionsModal() {
       if (optionsModal) optionsModal.remove();
       if (optionsBackdrop) optionsBackdrop.remove();
@@ -441,205 +439,4 @@
           exactCb.checked = false;
         }
       };
-      const fuzzySpan = document.createElement("span");
-      fuzzySpan.textContent = "Fuzzy Search";
-      fuzzyRow.appendChild(fuzzyCb);
-      fuzzyRow.appendChild(fuzzySpan);
-      optionsModal.appendChild(fuzzyRow);
-
-      // Exact only
-      const exactRow = document.createElement("label");
-      exactRow.className = "options-row";
-      const exactCb = document.createElement("input");
-      exactCb.type = "checkbox";
-      exactCb.checked = exactOnly;
-      exactCb.onchange = () => {
-        exactOnly = exactCb.checked;
-        if (exactOnly) {
-          fuzzyEnabled = false;
-          fuzzyCb.checked = false;
-        }
-      };
-      const exactSpan = document.createElement("span");
-      exactSpan.textContent = "Exact Match Only";
-      exactRow.appendChild(exactCb);
-      exactRow.appendChild(exactSpan);
-      optionsModal.appendChild(exactRow);
-
-      // Case-insensitive (UI only)
-      const ciRow = document.createElement("label");
-      ciRow.className = "options-row";
-      const ciCb = document.createElement("input");
-      ciCb.type = "checkbox";
-      ciCb.checked = caseInsensitive;
-      ciCb.onchange = () => {
-        caseInsensitive = ciCb.checked;
-      };
-      const ciSpan = document.createElement("span");
-      ciSpan.textContent = "Case-Insensitive";
-      ciRow.appendChild(ciCb);
-      ciRow.appendChild(ciSpan);
-      optionsModal.appendChild(ciRow);
-
-      document.body.appendChild(optionsBackdrop);
-      document.body.appendChild(optionsModal);
-    }
-
-    // ---------- SORTING + TABLE RENDER ----------
-
-    function onHeaderClick(colIndex) {
-      if (currentSortCol !== colIndex) {
-        currentSortCol = colIndex;
-        currentSortDir = "asc";
-      } else {
-        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
-      }
-      renderTable();
-    }
-
-    function sortResults(data) {
-      if (currentSortCol === null || currentSortDir === null) return data;
-
-      const colMap = {
-        0: "reference_number",
-        1: "make",
-        2: "part_number",
-        3: "company",
-        4: "description"
-      };
-
-      const key = colMap[currentSortCol];
-      const dir = currentSortDir;
-
-      const sorted = [...data].sort((a, b) => {
-        const va = (a[key] || "").toString().toUpperCase();
-        const vb = (b[key] || "").toString().toUpperCase();
-
-        if (!va && !vb) return 0;
-        if (!va) return 1;
-        if (!vb) return -1;
-
-        if (va < vb) return dir === "asc" ? -1 : 1;
-        if (va > vb) return dir === "asc" ? 1 : -1;
-        return 0;
-      });
-
-      return sorted;
-    }
-
-    function renderTable() {
-      const container = document.getElementById("results");
-
-      if (!allResults || allResults.length === 0) {
-        container.innerHTML = "<p>No results found.</p>";
-        return;
-      }
-
-      const sorted = sortResults(allResults);
-
-      let html = `<p><strong>${sorted.length}</strong> results found</p>`;
-      html += `<table id="resultsTable">
-        <tr>
-          ${renderHeaderCell(0, "Reference")}
-          ${renderHeaderCell(1, "Make")}
-          ${renderHeaderCell(2, "Part #")}
-          ${renderHeaderCell(3, "Company")}
-          ${renderHeaderCell(4, "Description")}
-        </tr>`;
-
-      for (const row of sorted) {
-        html += "<tr>";
-        // Reference
-        html += `<td style="${visibleColumns[0] ? "" : "display:none;"}">
-          <span class="linkable" onclick="openSearchMenu('${row.reference_number || ""}')">
-            ${row.reference_number || ""}
-          </span>
-        </td>`;
-        // Make
-        html += `<td style="${visibleColumns[1] ? "" : "display:none;"}">${row.make || ""}</td>`;
-        // Part #
-        html += `<td style="${visibleColumns[2] ? "" : "display:none;"}">
-          <span class="linkable" onclick="openSearchMenu('${row.part_number || ""}')">
-            ${row.part_number || ""}
-          </span>
-        </td>`;
-        // Company
-        html += `<td style="${visibleColumns[3] ? "" : "display:none;"}">${row.company || ""}</td>`;
-        // Description
-        html += `<td style="${visibleColumns[4] ? "" : "display:none;"}">${row.description || ""}</td>`;
-
-        html += "</tr>";
-      }
-
-      html += `</table>`;
-      container.innerHTML = html;
-    }
-
-    function renderHeaderCell(index, label) {
-      const arrow = getSortArrow(index);
-      const displayStyle = visibleColumns[index] ? "" : "display:none;";
-      return `
-        <th style="${displayStyle}" onclick="onHeaderClick(${index})">
-          <span class="sortable-header">
-            <span>${label}</span>
-            ${arrow ? `<span class="sort-arrow">${arrow}</span>` : ""}
-          </span>
-        </th>
-      `;
-    }
-
-    function getSortArrow(index) {
-      if (currentSortCol !== index) return "";
-      return currentSortDir === "asc" ? "▲" : "▼";
-    }
-
-    // ---------- SEARCH CALL ----------
-
-    async function runSearch() {
-      const q = document.getElementById("query").value.trim();
-      if (!q) return;
-
-      if (currentController) currentController.abort();
-      currentController = new AbortController();
-      const signal = currentController.signal;
-
-      showProgress();
-      document.getElementById("results").innerHTML = "<p>Searching...</p>";
-
-      const params = new URLSearchParams();
-      params.set("query", q);
-      if (fuzzyEnabled && !exactOnly) {
-        params.set("fuzzy", "true");
-      }
-
-      let res;
-      try {
-        res = await fetch(`/search?${params.toString()}`, { signal });
-      } catch (err) {
-        hideProgress();
-        if (err.name === "AbortError") return;
-        document.getElementById("results").innerHTML = "<p>Error loading results.</p>";
-        return;
-      }
-
-      currentController = null;
-      hideProgress();
-
-      const data = await res.json();
-
-      if (!data.results || data.results.length === 0) {
-        allResults = [];
-        document.getElementById("results").innerHTML = "<p>No results found.</p>";
-        return;
-      }
-
-      allResults = data.results;
-      // Reset sort when new search runs
-      currentSortCol = null;
-      currentSortDir = null;
-      renderTable();
-    }
-  </script>
-
-</body>
-</html>
+      const fuzzySpan
