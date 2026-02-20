@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import pg from "pg";
-import Cursor from "pg-cursor";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -16,51 +15,6 @@ const client = new pg.Client({
   ssl: { rejectUnauthorized: false }
 });
 
-// GLOBAL DATA
-let ALL_ROWS = [];
-let GRAPH = {};
-
-// ------------------------------------------------------------
-// STREAMING PRELOAD (prevents memory crash)
-// ------------------------------------------------------------
-async function preload() {
-  console.log("Streaming access_parts...");
-
-  const cursorQuery = `
-    SELECT reference_number, make, part_number, company, description
-    FROM public.access_parts
-  `;
-
-  const cursor = client.query(new Cursor(cursorQuery));
-
-  ALL_ROWS = [];
-  GRAPH = {};
-
-  const batchSize = 5000;
-
-  while (true) {
-    const rows = await cursor.read(batchSize);
-    if (rows.length === 0) break;
-
-    for (const row of rows) {
-      ALL_ROWS.push(row);
-
-      const a = row.part_number?.toUpperCase();
-      const b = row.reference_number?.toUpperCase();
-
-      if (!a || !b) continue;
-
-      if (!GRAPH[a]) GRAPH[a] = new Set();
-      if (!GRAPH[b]) GRAPH[b] = new Set();
-
-      GRAPH[a].add(b);
-      GRAPH[b].add(a);
-    }
-  }
-
-  console.log("Finished streaming rows:", ALL_ROWS.length);
-}
-
 // ------------------------------------------------------------
 // HEALTH CHECK
 // ------------------------------------------------------------
@@ -69,7 +23,7 @@ app.get("/health", (req, res) => {
 });
 
 // ------------------------------------------------------------
-// SEARCH ENDPOINT
+// SEARCH ENDPOINT (NO PRELOAD)
 // ------------------------------------------------------------
 app.get("/search", async (req, res) => {
   try {
@@ -78,32 +32,73 @@ app.get("/search", async (req, res) => {
       return res.json({ count: 0, results: [] });
     }
 
-    const visited = new Set();
+    // STEP 1 — Get all rows where either field matches the input
+    const seedRows = await client.query(
+      `
+      SELECT reference_number, make, part_number, company, description
+      FROM public.access_parts
+      WHERE UPPER(reference_number) = $1
+         OR UPPER(part_number) = $1
+      `,
+      [input]
+    );
+
+    if (seedRows.rows.length === 0) {
+      return res.json({ count: 0, results: [] });
+    }
+
+    // STEP 2 — BFS using database queries (no preload)
+    const visited = new Set([input]);
     const queue = [input];
+    const family = new Set([input]);
 
     while (queue.length > 0) {
       const current = queue.shift();
-      if (visited.has(current)) continue;
 
-      visited.add(current);
+      const neighbors = await client.query(
+        `
+        SELECT reference_number, part_number
+        FROM public.access_parts
+        WHERE UPPER(reference_number) = $1
+           OR UPPER(part_number) = $1
+        `,
+        [current]
+      );
 
-      if (GRAPH[current]) {
-        for (const neighbor of GRAPH[current]) {
-          if (!visited.has(neighbor)) queue.push(neighbor);
+      for (const row of neighbors.rows) {
+        const a = row.part_number?.toUpperCase();
+        const b = row.reference_number?.toUpperCase();
+
+        if (a && !visited.has(a)) {
+          visited.add(a);
+          family.add(a);
+          queue.push(a);
+        }
+
+        if (b && !visited.has(b)) {
+          visited.add(b);
+          family.add(b);
+          queue.push(b);
         }
       }
     }
 
-    const family = Array.from(visited);
+    const familyArray = Array.from(family);
 
-    const results = ALL_ROWS.filter(row =>
-      family.includes(row.part_number?.toUpperCase()) ||
-      family.includes(row.reference_number?.toUpperCase())
+    // STEP 3 — Final fetch of all matching rows
+    const finalRows = await client.query(
+      `
+      SELECT reference_number, make, part_number, company, description
+      FROM public.access_parts
+      WHERE UPPER(reference_number) = ANY($1)
+         OR UPPER(part_number) = ANY($1)
+      `,
+      [familyArray]
     );
 
     res.json({
-      count: results.length,
-      results
+      count: finalRows.rows.length,
+      results: finalRows.rows
     });
 
   } catch (err) {
@@ -118,7 +113,6 @@ app.get("/search", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 console.log("Render PORT value:", process.env.PORT);
 
-client.connect().then(async () => {
-  await preload();
+client.connect().then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
