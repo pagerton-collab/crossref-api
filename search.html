@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cross‑Reference Search</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h2 {
+      margin-bottom: 10px;
+    }
+    input {
+      width: 100%;
+      padding: 14px;
+      font-size: 18px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      text-transform: uppercase;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      font-size: 18px;
+      background: #0078ff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #005fcc;
+    }
+    #loading {
+      display: none;
+      margin-top: 15px;
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: white;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      font-size: 16px;
+    }
+    th {
+      background: #0078ff;
+      color: white;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Cross‑Reference Search</h2>
+
+<input id="query" placeholder="Enter part number…" />
+<button onclick="search()">Search</button>
+
+<div id="loading">
+  <progress style="width:100%;"></progress>
+  <p>Searching…</p>
+</div>
+
+<div id="results"></div>
+
+<script>
+async function search() {
+  let q = document.getElementById('query').value.trim().toUpperCase();
+  if (!q) return;
+
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').innerHTML = '';
+
+  // ⭐ FORCE NO CACHE
+  const ts = Date.now();
+
+  // ⭐ ALWAYS HIT THE GRAPH ENGINE
+  const url = `https://crossref-search.onrender.com/search?query=${encodeURIComponent(q)}&t=${ts}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "x-api-key": "paul123",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      }
+    });
+
+    const data = await res.json();
+
+    let html = `<p><strong>${data.count}</strong> results found</p>`;
+    html += `<table>
+      <tr>
+        <th>Reference</th>
+        <th>Make</th>
+        <th>Part #</th>
+        <th>Company</th>
+        <th>Description</th>
+      </tr>`;
+
+    for (const row of data.results) {
+      html += `
+        <tr>
+          <td>${row.reference_number || ""}</td>
+          <td>${row.make || ""}</td>
+          <td>${row.part_number || ""}</td>
+          <td>${row.company || ""}</td>
+          <td>${row.description || ""}</td>
+        </tr>`;
+    }
+
+    html += `</table>`;
+    document.getElementById('results').innerHTML = html;
+
+  } catch (err) {
+    document.getElementById('results').innerHTML = `<p>Error: ${err}</p>`;
+  }
+
+  document.getElementById('loading').style.display = 'none';
+}
+
+document.getElementById('query').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    document.getElementById('query').value =
+      document.getElementById('query').value.toUpperCase();
+    search();
+  }
+});
+</script>
+
+</body>
+</html>
