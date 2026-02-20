@@ -15,10 +15,51 @@ const client = new pg.Client({
   ssl: { rejectUnauthorized: false }
 });
 
-client.connect();
+// GLOBAL DATA (preloaded once)
+let ALL_ROWS = [];
+let GRAPH = {};
 
 // ------------------------------------------------------------
-// ⭐ GRAPH-BASED CROSS-REFERENCE SEARCH (using access_parts)
+// PRELOAD DATABASE + BUILD GRAPH ONCE
+// ------------------------------------------------------------
+async function preload() {
+  console.log("Preloading access_parts...");
+
+  const result = await client.query(`
+    SELECT reference_number, make, part_number, company, description
+    FROM public.access_parts
+  `);
+
+  ALL_ROWS = result.rows;
+  console.log("Loaded rows:", ALL_ROWS.length);
+
+  // Build graph once
+  GRAPH = {};
+  for (const row of ALL_ROWS) {
+    const a = row.part_number?.toUpperCase();
+    const b = row.reference_number?.toUpperCase();
+
+    if (!a || !b) continue;
+
+    if (!GRAPH[a]) GRAPH[a] = new Set();
+    if (!GRAPH[b]) GRAPH[b] = new Set();
+
+    GRAPH[a].add(b);
+    GRAPH[b].add(a);
+  }
+
+  console.log("Graph built.");
+}
+
+// ------------------------------------------------------------
+// HEALTH CHECK ENDPOINT
+// ------------------------------------------------------------
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// ------------------------------------------------------------
+// SEARCH ENDPOINT
 // ------------------------------------------------------------
 app.get("/search", async (req, res) => {
   try {
@@ -27,28 +68,7 @@ app.get("/search", async (req, res) => {
       return res.json({ count: 0, results: [] });
     }
 
-    // STEP 1 — Load all rows (reference_number <-> part_number pairs)
-    const allRows = await client.query(`
-      SELECT reference_number, make, part_number, company, description
-      FROM public.access_parts
-    `);
-
-    // STEP 2 — Build adjacency list (graph)
-    const graph = {};
-    for (const row of allRows.rows) {
-      const a = row.part_number?.toUpperCase();
-      const b = row.reference_number?.toUpperCase();
-
-      if (!a || !b) continue;
-
-      if (!graph[a]) graph[a] = new Set();
-      if (!graph[b]) graph[b] = new Set();
-
-      graph[a].add(b);
-      graph[b].add(a);
-    }
-
-    // STEP 3 — BFS to find entire connected family
+    // BFS on prebuilt graph
     const visited = new Set();
     const queue = [input];
 
@@ -58,31 +78,24 @@ app.get("/search", async (req, res) => {
 
       visited.add(current);
 
-      if (graph[current]) {
-        for (const neighbor of graph[current]) {
-          if (!visited.has(neighbor)) {
-            queue.push(neighbor);
-          }
+      if (GRAPH[current]) {
+        for (const neighbor of GRAPH[current]) {
+          if (!visited.has(neighbor)) queue.push(neighbor);
         }
       }
     }
 
-    // STEP 4 — Fetch all rows where either field is in the family
     const family = Array.from(visited);
 
-    const result = await client.query(
-      `
-      SELECT reference_number, make, part_number, company, description
-      FROM public.access_parts
-      WHERE UPPER(reference_number) = ANY($1)
-         OR UPPER(part_number) = ANY($1)
-      `,
-      [family]
+    // Filter preloaded rows instead of querying DB
+    const results = ALL_ROWS.filter(row =>
+      family.includes(row.part_number?.toUpperCase()) ||
+      family.includes(row.reference_number?.toUpperCase())
     );
 
     res.json({
-      count: result.rows.length,
-      results: result.rows
+      count: results.length,
+      results
     });
 
   } catch (err) {
@@ -96,5 +109,8 @@ app.get("/search", async (req, res) => {
 // ------------------------------------------------------------
 const PORT = process.env.PORT || 10000;
 console.log("Render PORT value:", process.env.PORT);
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+client.connect().then(async () => {
+  await preload();
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+});
