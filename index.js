@@ -16,6 +16,13 @@ const client = new pg.Client({
 });
 
 // ------------------------------------------------------------
+// ROOT ROUTE (REQUIRED FOR RENDER PORT DETECTION)
+// ------------------------------------------------------------
+app.get("/", (req, res) => {
+  res.json({ status: "running", message: "CrossRef API is live" });
+});
+
+// ------------------------------------------------------------
 // HEALTH CHECK
 // ------------------------------------------------------------
 app.get("/health", (req, res) => {
