@@ -298,9 +298,9 @@
       for (const row of data.results) {
         html += `
           <tr>
-            <td><span class="linkable" onclick="openSearchMenu('${row.reference_number}', event)">${row.reference_number || ""}</span></td>
+            <td><span class="linkable" onclick="openSearchMenu('${row.reference_number}', window.event)">${row.reference_number || ""}</span></td>
             <td>${row.make || ""}</td>
-            <td><span class="linkable" onclick="openSearchMenu('${row.part_number}', event)">${row.part_number || ""}</span></td>
+            <td><span class="linkable" onclick="openSearchMenu('${row.part_number}', window.event)">${row.part_number || ""}</span></td>
             <td>${row.company || ""}</td>
             <td>${row.description || ""}</td>
           </tr>`;
