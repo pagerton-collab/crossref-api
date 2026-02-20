@@ -16,7 +16,7 @@ const client = new pg.Client({
 });
 
 // ------------------------------------------------------------
-// ROOT ROUTE (REQUIRED FOR RENDER PORT DETECTION)
+// ROOT ROUTE (helps Render detect the port instantly)
 // ------------------------------------------------------------
 app.get("/", (req, res) => {
   res.json({ status: "running", message: "CrossRef API is live" });
@@ -30,7 +30,7 @@ app.get("/health", (req, res) => {
 });
 
 // ------------------------------------------------------------
-// SEARCH ENDPOINT (NO PRELOAD)
+// SEARCH ENDPOINT (NO PRELOAD, NO MEMORY CRASH)
 // ------------------------------------------------------------
 app.get("/search", async (req, res) => {
   try {
@@ -115,11 +115,12 @@ app.get("/search", async (req, res) => {
 });
 
 // ------------------------------------------------------------
-// SERVER START
+// SERVER START — WITH DELAY TO ALLOW RENDER TO INJECT PORT
 // ------------------------------------------------------------
-const PORT = process.env.PORT || 10000;
-console.log("Render PORT value:", process.env.PORT);
-
 client.connect().then(() => {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  setTimeout(() => {
+    const PORT = process.env.PORT || 10000;
+    console.log("Render PORT value:", process.env.PORT);
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  }, 50);
 });
