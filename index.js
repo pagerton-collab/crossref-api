@@ -1,3 +1,26 @@
+import express from "express";
+import pkg from "pg";
+const { Pool } = pkg;
+import dotenv from "dotenv";
+dotenv.config();
+
+// -------------------------------
+// EXPRESS + POSTGRES SETUP
+// -------------------------------
+const app = express();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+app.use(express.json());
+app.use(express.static("public"));
+
+
+// -------------------------------
+// HYBRID FUZZY SEARCH ROUTE
+// -------------------------------
 app.get("/search", async (req, res) => {
   const client = await pool.connect();
   try {
@@ -16,7 +39,7 @@ app.get("/search", async (req, res) => {
 
     if (!fuzzy) {
       // -------------------------------
-      // EXACT SEARCH MODE (fastest)
+      // EXACT SEARCH MODE
       // -------------------------------
       sql = `
         SELECT *,
@@ -32,7 +55,6 @@ app.get("/search", async (req, res) => {
       // Exact → Partial → Trigram
       // Balanced thresholds
       // -------------------------------
-
       sql = `
         WITH normalized_data AS (
           SELECT *,
@@ -81,4 +103,13 @@ app.get("/search", async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+
+// -------------------------------
+// START SERVER
+// -------------------------------
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
