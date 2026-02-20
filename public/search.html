@@ -16,37 +16,37 @@
       position: sticky;
       top: 0;
       background: white;
-      padding: 15px;
+      padding: 10px 12px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       z-index: 10;
     }
 
     .topbar input {
-      padding: 10px;
-      width: 65%;
-      font-size: 16px;
+      padding: 8px;
+      width: 60%;
+      font-size: 15px;
       border-radius: 6px;
       border: 1px solid #ccc;
     }
 
     .topbar button {
-      padding: 10px 16px;
-      font-size: 16px;
+      padding: 8px 14px;
+      font-size: 15px;
       border: none;
       background: #007bff;
       color: white;
       border-radius: 6px;
-      margin-left: 8px;
+      margin-left: 6px;
     }
 
     /* Progress bar */
     .progress-container {
       width: 100%;
       background: #ddd;
-      height: 6px;
+      height: 5px;
       border-radius: 4px;
       overflow: hidden;
-      margin-top: 10px;
+      margin-top: 8px;
       display: none;
     }
 
@@ -63,27 +63,31 @@
       100% { width: 0%; }
     }
 
-    /* Horizontal checkbox row */
+    /* Smaller checkboxes */
     .column-toggle {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-      font-size: 13px;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 11px;
     }
 
     .column-toggle label {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       background: #eee;
-      padding: 4px 8px;
-      border-radius: 6px;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    .column-toggle input {
+      transform: scale(0.75);
     }
 
     /* Results container */
     .results-frame {
-      margin: 15px;
+      margin: 12px;
       background: white;
       padding: 10px;
       border-radius: 10px;
@@ -99,7 +103,7 @@
 
     th, td {
       border: 1px solid #ddd;
-      padding: 8px;
+      padding: 6px;
       text-align: left;
       white-space: nowrap;
     }
@@ -115,38 +119,58 @@
       cursor: pointer;
     }
 
-    /* Popup menu */
-    .popup-menu {
-      position: absolute;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      padding: 10px;
-      z-index: 9999;
-      width: 220px;
-    }
-
-    .popup-menu button {
+    /* Modal backdrop */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
-      padding: 10px;
-      margin: 4px 0;
-      border: none;
-      background: #f0f0f0;
-      border-radius: 6px;
-      font-size: 14px;
-      text-align: left;
-      cursor: pointer;
+      height: 100%;
+      background: rgba(0,0,0,0.4);
+      z-index: 9998;
     }
 
-    .popup-menu button:hover {
+    /* Centered popup card */
+    .popup-menu {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      width: 260px;
+      max-height: 70%;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      z-index: 9999;
+    }
+
+    /* Compact pill-style buttons (two columns) */
+    .popup-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .popup-btn {
+      padding: 8px;
+      background: #f0f0f0;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .popup-btn:hover {
       background: #e0e0e0;
     }
 
     @media (max-width: 600px) {
       .topbar input {
         width: 100%;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
       }
       .topbar button {
         width: 100%;
@@ -159,7 +183,7 @@
   </style>
 </head>
 
-<body onclick="closePopup(event)">
+<body>
 
   <div class="topbar">
     <input id="query" placeholder="Enter part number" oninput="this.value=this.value.toUpperCase()">
@@ -183,18 +207,17 @@
   </div>
 
   <script>
-    let popup = null;
     let currentController = null;
+    let backdrop = null;
+    let popup = null;
 
-    // ENTER key submits
-    document.getElementById("query").addEventListener("keypress", function(e) {
+    document.getElementById("query").addEventListener("keypress", e => {
       if (e.key === "Enter") runSearch();
     });
 
     function toggleColumn(colIndex) {
       const table = document.getElementById("resultsTable");
       if (!table) return;
-
       for (let row of table.rows) {
         let cell = row.cells[colIndex];
         cell.style.display = cell.style.display === "none" ? "" : "none";
@@ -209,23 +232,37 @@
       document.getElementById("progressContainer").style.display = "none";
     }
 
-    function closePopup(e) {
-      if (popup && !popup.contains(e.target)) {
-        popup.remove();
-        popup = null;
-      }
+    function closeModal() {
+      if (popup) popup.remove();
+      if (backdrop) backdrop.remove();
+      popup = null;
+      backdrop = null;
     }
 
-    function openSearchMenu(part, event) {
-      if (popup) popup.remove();
+    function openSearchMenu(part) {
+      closeModal();
+
+      backdrop = document.createElement("div");
+      backdrop.className = "modal-backdrop";
+      backdrop.onclick = closeModal;
 
       popup = document.createElement("div");
       popup.className = "popup-menu";
 
+      const title = document.createElement("div");
+      title.textContent = part;
+      title.style.fontWeight = "bold";
+      title.style.fontSize = "16px";
+      title.style.marginBottom = "12px";
+      popup.appendChild(title);
+
+      const grid = document.createElement("div");
+      grid.className = "popup-grid";
+
       const sites = [
         { name: "Google", url: `https://www.google.com/search?q=${part}` },
         { name: "Messicks", url: `https://www.messicks.com/search?q=${part}` },
-        { name: "All States Ag Parts", url: `https://www.tractorpartsasap.com/search?keywords=${part}` },
+        { name: "ASAP", url: `https://www.tractorpartsasap.com/search?keywords=${part}` },
         { name: "Worthington", url: `https://www.wtpinc.com/search?searchText=${part}` },
         { name: "eBay", url: `https://www.ebay.com/sch/i.html?_nkw=${part}` },
         { name: "Amazon", url: `https://www.amazon.com/s?k=${part}` },
@@ -236,26 +273,23 @@
 
       sites.forEach(site => {
         const btn = document.createElement("button");
+        btn.className = "popup-btn";
         btn.textContent = site.name;
         btn.onclick = () => window.open(site.url, "_blank");
-        popup.appendChild(btn);
+        grid.appendChild(btn);
       });
 
-      document.body.appendChild(popup);
+      popup.appendChild(grid);
 
-      popup.style.left = event.pageX + "px";
-      popup.style.top = event.pageY + "px";
+      document.body.appendChild(backdrop);
+      document.body.appendChild(popup);
     }
 
     async function runSearch() {
       const q = document.getElementById("query").value.trim();
       if (!q) return;
 
-      // Cancel previous search
-      if (currentController) {
-        currentController.abort();
-      }
-
+      if (currentController) currentController.abort();
       currentController = new AbortController();
       const signal = currentController.signal;
 
@@ -267,10 +301,7 @@
         res = await fetch(`/search?query=${encodeURIComponent(q)}`, { signal });
       } catch (err) {
         hideProgress();
-        if (err.name === "AbortError") {
-          console.log("Previous search cancelled");
-          return;
-        }
+        if (err.name === "AbortError") return;
         document.getElementById("results").innerHTML = "<p>Error loading results.</p>";
         return;
       }
@@ -298,9 +329,9 @@
       for (const row of data.results) {
         html += `
           <tr>
-            <td><span class="linkable" onclick="openSearchMenu('${row.reference_number}', window.event)">${row.reference_number || ""}</span></td>
+            <td><span class="linkable" onclick="openSearchMenu('${row.reference_number}')">${row.reference_number || ""}</span></td>
             <td>${row.make || ""}</td>
-            <td><span class="linkable" onclick="openSearchMenu('${row.part_number}', window.event)">${row.part_number || ""}</span></td>
+            <td><span class="linkable" onclick="openSearchMenu('${row.part_number}')">${row.part_number || ""}</span></td>
             <td>${row.company || ""}</td>
             <td>${row.description || ""}</td>
           </tr>`;
