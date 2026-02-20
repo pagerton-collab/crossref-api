@@ -346,11 +346,11 @@
       const sites = [
         { name: "Google", url: `https://www.google.com/search?q=${part}` },
         { name: "Messicks", url: `https://www.messicks.com/search?q=${part}` },
-        { name: "ASAP", url: `https://www.tractorpartsasap.com/search?keywords=${part}` },
-        { name: "Worthington", url: `https://www.wtpinc.com/search?searchText=${part}` },
+        { name: "ASAP", url: `https://www.tractorpartsasap.com/catalogsearch/result/?q=${part}` },
+        { name: "Worthington", url: `https://www.worthingtonagparts.com/catalogsearch/result/?q=${part}` },
         { name: "eBay", url: `https://www.ebay.com/sch/i.html?_nkw=${part}` },
         { name: "Amazon", url: `https://www.amazon.com/s?k=${part}` },
-        { name: "TractorHouse", url: `https://www.tractorhouse.com/listings/search?keywords=${part}` },
+        { name: "TractorHouse", url: `https://www.tractorhouse.com/parts/search?keywords=${part}` },
         { name: "SMA WC", url: `https://wc.smalink.net/common/inventory/itemlookup.aspx?searchstring=${part}&customerid=0` },
         { name: "SMALink", url: `https://www.smalink.com/c?search=${part}` }
       ];
@@ -439,4 +439,165 @@
           exactCb.checked = false;
         }
       };
-      const fuzzySpan
+      const fuzzySpan = document.createElement("span");
+      fuzzySpan.textContent = "Fuzzy Search";
+      fuzzyRow.appendChild(fuzzyCb);
+      fuzzyRow.appendChild(fuzzySpan);
+      optionsModal.appendChild(fuzzyRow);
+
+      // Exact match
+      const exactRow = document.createElement("label");
+      exactRow.className = "options-row";
+      const exactCb = document.createElement("input");
+      exactCb.type = "checkbox";
+      exactCb.checked = exactOnly;
+      exactCb.onchange = () => {
+        exactOnly = exactCb.checked;
+        if (exactOnly) {
+          fuzzyEnabled = false;
+          fuzzyCb.checked = false;
+        }
+      };
+      const exactSpan = document.createElement("span");
+      exactSpan.textContent = "Exact Match Only";
+      exactRow.appendChild(exactCb);
+      exactRow.appendChild(exactSpan);
+      optionsModal.appendChild(exactRow);
+
+      // Case insensitive
+      const caseRow = document.createElement("label");
+      caseRow.className = "options-row";
+      const caseCb = document.createElement("input");
+      caseCb.type = "checkbox";
+      caseCb.checked = caseInsensitive;
+      caseCb.onchange = () => {
+        caseInsensitive = caseCb.checked;
+      };
+      const caseSpan = document.createElement("span");
+      caseSpan.textContent = "Case Insensitive";
+      caseRow.appendChild(caseCb);
+      caseRow.appendChild(caseSpan);
+      optionsModal.appendChild(caseRow);
+
+      document.body.appendChild(optionsBackdrop);
+      document.body.appendChild(optionsModal);
+    }
+
+    // ---------- SEARCH FUNCTION ----------
+    async function runSearch() {
+      const query = document.getElementById("query").value.trim();
+      if (!query) return;
+
+      if (currentController) currentController.abort();
+      currentController = new AbortController();
+
+      showProgress();
+
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          fuzzy: fuzzyEnabled ? "1" : "0",
+          exact: exactOnly ? "1" : "0",
+          ci: caseInsensitive ? "1" : "0"
+        });
+
+        const res = await fetch(`/search?${params.toString()}`, {
+          signal: currentController.signal
+        });
+
+        const data = await res.json();
+        allResults = data.results || [];
+        renderTable();
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          document.getElementById("results").innerHTML = "<p>Error running search.</p>";
+        }
+      }
+
+      hideProgress();
+    }
+
+    // ---------- RENDER TABLE ----------
+    function renderTable() {
+      if (!allResults.length) {
+        document.getElementById("results").innerHTML = "<p>No results found.</p>";
+        return;
+      }
+
+      let html = "<table><thead><tr>";
+
+      const headers = ["Reference", "Make", "Part #", "Company", "Description"];
+
+      headers.forEach((h, idx) => {
+        if (!visibleColumns[idx]) return;
+
+        const arrow =
+          currentSortCol === idx
+            ? currentSortDir === "asc"
+              ? "▲"
+              : "▼"
+            : "";
+
+        html += `<th onclick="sortTable(${idx})">
+                  <span class="sortable-header">${h} <span class="sort-arrow">${arrow}</span></span>
+                </th>`;
+      });
+
+      html += "</tr></thead><tbody>";
+
+      allResults.forEach(row => {
+        html += "<tr>";
+
+        const cols = [
+          row.reference || "",
+          row.make || "",
+          row.part || "",
+          row.company || "",
+          row.description || ""
+        ];
+
+        cols.forEach((val, idx) => {
+          if (!visibleColumns[idx]) return;
+
+          if (idx === 2) {
+            html += `<td class="linkable" onclick="openSearchMenu('${val}')">${val}</td>`;
+          } else {
+            html += `<td>${val}</td>`;
+          }
+        });
+
+        html += "</tr>";
+      });
+
+      html += "</tbody></table>";
+
+      document.getElementById("results").innerHTML = html;
+    }
+
+    // ---------- SORTING ----------
+    function sortTable(col) {
+      if (currentSortCol === col) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+      } else {
+        currentSortCol = col;
+        currentSortDir = "asc";
+      }
+
+      allResults.sort((a, b) => {
+        const cols = ["reference", "make", "part", "company", "description"];
+        const key = cols[col];
+
+        const valA = (a[key] || "").toString().toUpperCase();
+        const valB = (b[key] || "").toString().toUpperCase();
+
+        if (valA < valB) return currentSortDir === "asc" ? -1 : 1;
+        if (valA > valB) return currentSortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+
+      renderTable();
+    }
+  </script>
+
+</body>
+</html>
