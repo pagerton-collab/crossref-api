@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import pg from "pg";
+import Cursor from "pg-cursor";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -15,44 +16,53 @@ const client = new pg.Client({
   ssl: { rejectUnauthorized: false }
 });
 
-// GLOBAL DATA (preloaded once)
+// GLOBAL DATA
 let ALL_ROWS = [];
 let GRAPH = {};
 
 // ------------------------------------------------------------
-// PRELOAD DATABASE + BUILD GRAPH ONCE
+// STREAMING PRELOAD (prevents memory crash)
 // ------------------------------------------------------------
 async function preload() {
-  console.log("Preloading access_parts...");
+  console.log("Streaming access_parts...");
 
-  const result = await client.query(`
+  const cursorQuery = `
     SELECT reference_number, make, part_number, company, description
     FROM public.access_parts
-  `);
+  `;
 
-  ALL_ROWS = result.rows;
-  console.log("Loaded rows:", ALL_ROWS.length);
+  const cursor = client.query(new Cursor(cursorQuery));
 
-  // Build graph once
+  ALL_ROWS = [];
   GRAPH = {};
-  for (const row of ALL_ROWS) {
-    const a = row.part_number?.toUpperCase();
-    const b = row.reference_number?.toUpperCase();
 
-    if (!a || !b) continue;
+  const batchSize = 5000;
 
-    if (!GRAPH[a]) GRAPH[a] = new Set();
-    if (!GRAPH[b]) GRAPH[b] = new Set();
+  while (true) {
+    const rows = await cursor.read(batchSize);
+    if (rows.length === 0) break;
 
-    GRAPH[a].add(b);
-    GRAPH[b].add(a);
+    for (const row of rows) {
+      ALL_ROWS.push(row);
+
+      const a = row.part_number?.toUpperCase();
+      const b = row.reference_number?.toUpperCase();
+
+      if (!a || !b) continue;
+
+      if (!GRAPH[a]) GRAPH[a] = new Set();
+      if (!GRAPH[b]) GRAPH[b] = new Set();
+
+      GRAPH[a].add(b);
+      GRAPH[b].add(a);
+    }
   }
 
-  console.log("Graph built.");
+  console.log("Finished streaming rows:", ALL_ROWS.length);
 }
 
 // ------------------------------------------------------------
-// HEALTH CHECK ENDPOINT
+// HEALTH CHECK
 // ------------------------------------------------------------
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
@@ -68,7 +78,6 @@ app.get("/search", async (req, res) => {
       return res.json({ count: 0, results: [] });
     }
 
-    // BFS on prebuilt graph
     const visited = new Set();
     const queue = [input];
 
@@ -87,7 +96,6 @@ app.get("/search", async (req, res) => {
 
     const family = Array.from(visited);
 
-    // Filter preloaded rows instead of querying DB
     const results = ALL_ROWS.filter(row =>
       family.includes(row.part_number?.toUpperCase()) ||
       family.includes(row.reference_number?.toUpperCase())
