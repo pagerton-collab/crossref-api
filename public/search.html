@@ -2,34 +2,153 @@
 <html>
 <head>
   <title>CrossRef Search</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
-    body { font-family: Arial; padding: 20px; }
-    input { padding: 10px; width: 250px; }
-    button { padding: 10px; }
-    pre { background: #eee; padding: 10px; margin-top: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      background: #f5f5f5;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    input {
+      padding: 12px;
+      width: 70%;
+      font-size: 18px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 12px 20px;
+      font-size: 18px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 6px;
+      margin-left: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 16px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #eee;
+    }
+
+    .column-toggle {
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 600px) {
+      input {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+      button {
+        width: 100%;
+        margin-left: 0;
+      }
+    }
   </style>
 </head>
+
 <body>
+  <div class="container">
+    <h1>CrossRef Search</h1>
 
-  <h1>CrossRef Search</h1>
+    <input id="query" placeholder="Enter part number" oninput="this.value=this.value.toUpperCase()">
+    <button onclick="runSearch()">Search</button>
 
-  <input id="query" placeholder="Enter part number">
-  <button onclick="runSearch()">Search</button>
+    <div class="column-toggle">
+      <label><input type="checkbox" checked onclick="toggleColumn(0)"> Reference</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(1)"> Make</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(2)"> Part #</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(3)"> Company</label>
+      <label><input type="checkbox" checked onclick="toggleColumn(4)"> Description</label>
+    </div>
 
-  <pre id="output"></pre>
+    <div id="results"></div>
+  </div>
 
   <script>
+    // ENTER KEY triggers search
+    document.getElementById("query").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") runSearch();
+    });
+
+    function toggleColumn(colIndex) {
+      const table = document.getElementById("resultsTable");
+      if (!table) return;
+
+      for (let row of table.rows) {
+        let cell = row.cells[colIndex];
+        if (cell.style.display === "none") {
+          cell.style.display = "";
+        } else {
+          cell.style.display = "none";
+        }
+      }
+    }
+
     async function runSearch() {
       const q = document.getElementById("query").value.trim();
       if (!q) return;
 
-      document.getElementById("output").textContent = "Searching...";
+      document.getElementById("results").innerHTML = "<p>Searching...</p>";
 
       const res = await fetch(`/search?query=${encodeURIComponent(q)}`);
       const data = await res.json();
 
-      document.getElementById("output").textContent =
-        JSON.stringify(data, null, 2);
+      if (!data.results || data.results.length === 0) {
+        document.getElementById("results").innerHTML = "<p>No results found.</p>";
+        return;
+      }
+
+      let html = `<p><strong>${data.count}</strong> results found</p>`;
+      html += `<table id="resultsTable">
+        <tr>
+          <th>Reference</th>
+          <th>Make</th>
+          <th>Part #</th>
+          <th>Company</th>
+          <th>Description</th>
+        </tr>`;
+
+      for (const row of data.results) {
+        html += `
+          <tr>
+            <td>${row.reference_number || ""}</td>
+            <td>${row.make || ""}</td>
+            <td>${row.part_number || ""}</td>
+            <td>${row.company || ""}</td>
+            <td>${row.description || ""}</td>
+          </tr>`;
+      }
+
+      html += `</table>`;
+      document.getElementById("results").innerHTML = html;
     }
   </script>
 
